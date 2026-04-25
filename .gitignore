@@ -5,3 +5,12 @@ media/vendor/
 .vscode-test/
 .DS_Store
 Thumbs.db
+
+# Secrets — defense-in-depth even though this extension stores no credentials
+.env
+.env.*
+!.env.example
+credentials.json
+serviceAccountKey*.json
+*.pem
+*.key

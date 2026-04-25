@@ -3,6 +3,31 @@ import { marked } from './vendor/marked.esm.js';
 
 marked.setOptions({ breaks: true, gfm: true });
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(name, attrs) {
+  const el = document.createElementNS(SVG_NS, name);
+  for (const k in attrs) {
+    el.setAttribute(k, attrs[k]);
+  }
+  return el;
+}
+
+function makePinSvg(filled) {
+  const svg = svgEl('svg', { width: '14', height: '14', viewBox: '0 0 16 16', 'aria-hidden': 'true' });
+  if (filled) {
+    svg.setAttribute('fill', 'currentColor');
+    svg.append(svgEl('path', { d: 'M5.5 1a.5.5 0 0 0-.354.854L6 2.707V6L3 8v1h4v5l1 1 1-1V9h4V8L10 6V2.707l.854-.853A.5.5 0 0 0 10.5 1z' }));
+  } else {
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.4');
+    svg.append(svgEl('path', { d: 'M5.5 1.5h5l-.7 1.4V6L13 8.4V9H3v-.6L5.7 6V2.9z' }));
+    svg.append(svgEl('path', { d: 'M8 9v5.5' }));
+  }
+  return svg;
+}
+
 const vscode = acquireVsCodeApi();
 
 /** @type {Array<{id:string,title:string,body:string,tags:string[],createdAt:string,updatedAt:string}>} */
@@ -183,7 +208,11 @@ function renderGrid() {
   if (filtered.length === 0 && notes.length > 0) {
     const nothing = document.createElement('div');
     nothing.className = 'empty';
-    nothing.innerHTML = '<h2>No notes match</h2><p>Try clearing the search or tag filters.</p>';
+    const heading = document.createElement('h2');
+    heading.textContent = 'No notes match';
+    const hint = document.createElement('p');
+    hint.textContent = 'Try clearing the search or tag filters.';
+    nothing.append(heading, hint);
     els.grid.append(nothing);
     return;
   }
@@ -233,9 +262,7 @@ function renderCard(note) {
   pinBtn.className = 'pin-btn' + (note.pinned ? ' pinned' : '');
   pinBtn.setAttribute('aria-pressed', String(note.pinned));
   pinBtn.title = note.pinned ? 'Unpin' : 'Pin';
-  pinBtn.innerHTML = note.pinned
-    ? '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 1a.5.5 0 0 0-.354.854L6 2.707V6L3 8v1h4v5l1 1 1-1V9h4V8L10 6V2.707l.854-.853A.5.5 0 0 0 10.5 1z"/></svg>'
-    : '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M5.5 1.5h5l-.7 1.4V6L13 8.4V9H3v-.6L5.7 6V2.9z"/><path d="M8 9v5.5"/></svg>';
+  pinBtn.append(makePinSvg(note.pinned));
   pinBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     vscode.postMessage({ type: 'update', id: note.id, patch: { pinned: !note.pinned } });
@@ -466,6 +493,10 @@ function setBodyMode(mode) {
     return;
   }
   if (mode === 'preview') {
+    // marked output flows through innerHTML so markdown renders. Safe under
+    // the webview CSP (script-src 'nonce-X' webview.cspSource): inline
+    // <script>, on*-handlers, javascript: URIs, and remote <img> are all
+    // blocked. See THREAT_MODEL.md §F (markdown preview rendering).
     els.bodyPreview.innerHTML = marked.parse(els.bodyInput.value || '');
     els.bodyPreview.hidden = false;
     els.bodyInput.hidden = true;

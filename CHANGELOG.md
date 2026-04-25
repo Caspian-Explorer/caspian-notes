@@ -2,6 +2,17 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.4] - 2026-04-25
+
+### Security
+- **Restored the `textContent`-only invariant** documented in [THREAT_MODEL.md](THREAT_MODEL.md) §C. Two webview callsites that were using static-string `innerHTML` (the empty-state heading at `media/main.js:186` and the pin-button SVG at `media/main.js:236`) now build their DOM via `createElement`/`createElementNS`. Neither was an exploitable XSS — both strings were literals — but the invariant matters for static analysis and future-proofing.
+- **Documented the markdown-preview rendering surface** as new [THREAT_MODEL.md](THREAT_MODEL.md) §F. The preview pane introduced in 1.3.0 sends `marked.parse(body)` into `innerHTML`, which is safe under the existing CSP (`script-src 'nonce-X' webview.cspSource`; `default-src 'none'`; `img-src webview.cspSource data:`) — that CSP blocks every JavaScript sink raw markdown HTML could expose (inline `<script>`, `on*` handlers, `javascript:` URIs, remote `<img>`, `<iframe>`). Added an inline comment at `media/main.js:478` so future contributors don't add a sanitizer reflexively or weaken the CSP without re-evaluating §F.
+- **Bumped `@typescript-eslint/eslint-plugin` and `@typescript-eslint/parser` from ^6.0.0 to ^8.0.0.** Resolves all 6 high-severity `npm audit` findings (transitive on `@typescript-eslint/typescript-estree`). v8 requires ESLint ≥8.57 and Node ≥18.18, both satisfied.
+- **Hardened `.gitignore`** with patterns for `.env`, `.env.*`, `credentials.json`, `serviceAccountKey*.json`, `*.pem`, `*.key`. The extension stores no credentials, so this is purely defense-in-depth against accidental check-ins of unrelated files in dev workspaces.
+
+### Notes (not changed)
+The remaining 5 moderate `npm audit` findings (`@vscode/vsce` → `@azure/identity` → `@azure/msal-node` → `uuid`, plus `ovsx`) are dev-only and never ship in the VSIX. `npm audit fix --force` would *downgrade* `ovsx` from 0.10.11 to 0.9.4, losing features. Accepted risk.
+
 ## [1.3.3] - 2026-04-25
 
 ### Fixed
