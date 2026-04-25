@@ -2,6 +2,11 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.3] - 2026-04-25
+
+### Fixed
+- **Editor modal now fills the full webview height.** Previously the New / Edit note dialog was vertically centered inside the backdrop and capped at `max-height: 92vh`, which made it look like a half-height popup when the library was opened in a narrow panel (e.g. the secondary sidebar). Backdrop now uses `align-items: stretch`, the modal takes `height: 100%` of the available area, and the body textarea / Markdown preview flex-grow to fill remaining space inside the modal. Min-heights for textarea and preview reduced from 220 px to 120 px so the modal still renders correctly in very short panels.
+
 ## [1.3.2] - 2026-04-25
 
 ### Changed

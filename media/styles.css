@@ -359,9 +359,9 @@ body.view-list .card .actions {
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  padding: 24px;
+  padding: 16px;
   z-index: 30;
 }
 
@@ -371,7 +371,7 @@ body.view-list .card .actions {
 
 .editor {
   width: min(720px, 100%);
-  max-height: 92vh;
+  height: 100%;
   overflow: auto;
   background: var(--vscode-editor-background);
   border: var(--border);
@@ -439,6 +439,7 @@ body.view-list .card .actions {
 
 .editor label.body-label {
   flex: 1;
+  min-height: 0;
 }
 
 .editor input[type='text'],
@@ -456,7 +457,8 @@ body.view-list .card .actions {
 .editor textarea {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 12.5px;
-  min-height: 220px;
+  flex: 1;
+  min-height: 120px;
 }
 
 .body-label-row {
@@ -493,7 +495,8 @@ body.view-list .card .actions {
 }
 
 .body-preview {
-  min-height: 220px;
+  flex: 1;
+  min-height: 120px;
   padding: 10px 12px;
   border: var(--border);
   border-radius: 6px;
@@ -501,7 +504,6 @@ body.view-list .card .actions {
   font-family: var(--vscode-font-family);
   font-size: 13px;
   overflow: auto;
-  max-height: 50vh;
 }
 
 .body-preview h1,
