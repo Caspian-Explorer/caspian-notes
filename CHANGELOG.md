@@ -1,0 +1,156 @@
+# Changelog
+
+All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
+
+## [1.3.2] - 2026-04-25
+
+### Changed
+- **Pinned all text files to LF line endings via new `.gitattributes`.** Neutralizes Git's `core.autocrlf=true` default on Windows machines so contributors no longer see noisy LF↔CRLF diffs on files they didn't touch. Binary assets (`*.png`, `*.jpg`, `*.jpeg`, `*.gif`, `*.ico`, `*.svg`, `*.woff`, `*.woff2`, `*.vsix`) are explicitly marked binary so Git never normalizes them.
+
+## [1.3.1] - 2026-04-25
+
+### Added
+- **GitHub Actions CI workflow** (`.github/workflows/ci.yml`) — runs lint, compile, tests, and `npm audit` on every push and PR.
+- **GitHub Actions release workflow** (`.github/workflows/release.yml`) — packages a VSIX and creates a GitHub Release with auto-extracted CHANGELOG notes when a `v*` tag is pushed. Marketplace / Open VSX publish steps are scaffolded but commented out until the user adds tokens.
+- **`npm run audit`** convenience script.
+- **README badges** for Marketplace version / installs / rating, license, and CI status.
+- **CLAUDE.md**: filled in the now-known caspian-notes repo GraphQL ID (`R_kgDOSLnYTw`); the Announcements category ID still requires Discussions to be enabled on the repo first.
+
+### Notes
+- README screenshots are stubbed — capture grid/sidebar/editor PNGs into `media/screenshots/` before the first marketplace listing for best conversion.
+
+## [1.3.0] - 2026-04-25
+
+### Added
+- **Export / Import library.** New commands `Caspian Notes: Export Library to JSON…` and `Caspian Notes: Import Library from JSON…`. Export writes a `caspian-notes-YYYY-MM-DD.json` snapshot of every note; import reads any prior export (or a bare-array variant) and ingests them with fresh IDs so duplicates can't collide.
+- **Variable templating.** Note bodies can include `{{var}}` placeholders. Built-ins (`date`, `time`, `datetime`, `selection`, `filename`, `filepath`) resolve automatically; unknown variables prompt the user via QuickInput. Templates expand on Copy / Insert / Send to Chat (not on Edit). Cancelling any prompt aborts the action.
+- **Markdown preview tab** in the editor modal. Toggle Edit/Preview alongside the body field. Rendering uses `marked` (ESM, vendored) — strict CSP keeps the preview safe from script execution.
+- **Tag-grouped tree view.** New setting `caspianNotes.treeGrouping` (`flat` | `byTag`) and a view-title button ($(list-tree)) to toggle. In byTag mode notes are listed under their tags with an "Untagged" bucket; toggle is per-user (Global) so it persists across workspaces.
+
+### Changed
+- Action dispatch consolidated into `src/noteActions.ts`. Both the webview and the tree-command surfaces now run through one `performAction(store, action, id, presenter)` pipeline. Removes ~50 lines of duplication.
+- Added `marked` (~30 KB) to runtime deps and `vendor/marked.esm.js` to the build output. CSP is unchanged — preview HTML is rendered via `innerHTML` but inline scripts and `onerror` handlers are blocked by the existing nonce-based `script-src`.
+
+### Test
+- 35 unit tests total (was 19) — added `templates.test.ts` (14 tests) and `importNotes` cases in `noteStore.test.ts` (2 added).
+
+## [1.2.0] - 2026-04-25
+
+### Added
+- **Fuzzy search** via `fuse.js`. Typing `rvw` matches "review", `clde` matches "claude". The substring path is kept as a fallback for single-character queries (where fuzzy is too noisy). Search runs across title, tags, and body with weighted scoring.
+- **Tag autocomplete** in the editor's tags input. Type a partial tag to see existing tags as a dropdown — Tab/Enter to accept, ↑/↓ to navigate, Esc to dismiss.
+- **Undo on delete.** Confirmation modal is gone; delete is immediate and a non-modal toast offers an Undo button. Restoring preserves the original `id`, `createdAt`, and `updatedAt`.
+- **Duplicate note** — right-click a tree item → "Duplicate". Creates a copy with `(copy)` suffix; same tags, body, and a fresh id.
+- **Pin / star** — pinned notes always sort to the top. Click the pin icon on a card (top-left, visible on hover or always when pinned) or right-click a tree item → "Pin / Unpin". Pinned notes get the `pinned` ThemeIcon in the sidebar tree. Toggling pin does NOT bump `updatedAt`.
+- **README banner** — `media/banner.png` is now used as the hero image at the top of the README for marketplace listings.
+
+### Changed
+- `Note` model now has a `pinned: boolean` field; serialized in frontmatter only when `true` (keeps existing files clean).
+- `NoteStore.list()` sort: pinned notes first, then by `updatedAt` desc among pinned and among unpinned independently.
+- Webview script tag is now `type="module"` and the entry script imports `fuse.js` from `media/vendor/fuse.min.mjs`. CSP `script-src` extended with `webview.cspSource` to permit ESM imports while keeping the inline-script nonce requirement.
+
+### Test
+- 19 unit tests for `NoteStore` (was 14) — added coverage for pin sort, pin updatedAt semantics, restore round-trip, default pinned value.
+
+## [1.1.0] - 2026-04-25
+
+### Added
+- **Filesystem watcher** on `globalStorage/notes/`. External edits (manual edits, restores from backup, sync clients) are reflected in the UI without a reload.
+- **Parse-error notifications.** Notes whose frontmatter fails to parse no longer disappear silently — a one-time warning is shown per file with a "Reveal in Folder" action so the user can repair them.
+- **Vitest test suite** for `NoteStore` covering CRUD, tag normalization, sort order, parse-error events, and round-trip stability (14 tests).
+
+### Changed
+- `NoteStore.list()` now reads files in parallel via `Promise.all`. ~10× faster for large libraries.
+- `NoteStore` constructor takes a directory path directly; new `NoteStore.fromContext()` factory builds the path from `vscode.ExtensionContext`. Makes the store unit-testable without a vscode mock.
+- `chatCommand` setting is now validated — must contain `"chat"` (case-insensitive). Destructive built-ins like `workbench.action.quit` are rejected with a one-time warning, with fallback to the default. Defends against malicious workspace-level config.
+- Tree-view tooltip now sets `isTrusted = false` and `supportHtml = false`, and escapes markdown control characters in note title/body before rendering.
+- TypeScript: enabled `noImplicitOverride`, `noUncheckedIndexedAccess`, `noFallthroughCasesInSwitch` in `tsconfig.json`.
+- ESLint: now extends `@typescript-eslint/recommended` with `prefer-const` and unused-var warnings.
+
+### Fixed
+- Round-trip stability: every save no longer accumulated a trailing newline in the body. Caught by a new test.
+
+## [1.0.1] - 2026-04-25
+
+### Changed
+- Toolbar button label shortened from `+ New note` to `+ New`. Empty-state hint and quickstart doc updated to match.
+
+## [1.0.0] - 2026-04-25
+
+### Changed
+- First stable release. No functional changes from 0.4.1 — the bump signals that the rebrand to Caspian Notes (commands, settings, view IDs, storage paths, branding icon) is complete and ready for marketplace submission.
+
+## [0.4.1] - 2026-04-25
+
+### Changed
+- Marketplace / Extensions-detail icon now uses `media/favicon.png` (the user-supplied brand mark) instead of the inherited shield. Top-level `icon.png` removed.
+
+## [0.4.0] - 2026-04-25
+
+### Changed
+- **Renamed extension from "Caspian Prompt" to "Caspian Notes."** The package id (`caspian-prompt` → `caspian-notes`), display name, all command IDs (`caspianPrompt.*` → `caspianNotes.*`), settings keys, view IDs, and on-disk storage subdirectory (`prompts/` → `notes/`) all change. Internal types/classes renamed to `Note`, `NoteStore`, `NotePanel`, `NoteTreeProvider`.
+
+### Breaking
+- VS Code treats this as a brand-new extension (`caspiantools.caspian-notes`). The old `caspiantools.caspian-prompt` install must be uninstalled manually from the Extensions view.
+- Existing data does **not** migrate. Notes saved under the old extension remain at `globalStorage/caspiantools.caspian-prompt/prompts/`; the new extension starts with an empty library at `globalStorage/caspiantools.caspian-notes/notes/`.
+
+## [0.3.2] - 2026-04-25
+
+### Fixed
+- New-note editor would not close (X / Cancel / Esc / backdrop click). Real cause: `.backdrop { display: flex }` had higher specificity than the user-agent `[hidden] { display: none }` rule, so toggling the `hidden` attribute did nothing visually. Added an explicit `.backdrop[hidden] { display: none }` rule. (Bug existed since 0.1.0.)
+
+## [0.3.1] - 2026-04-25
+
+### Fixed
+- New-note editor could not be closed (X / Cancel / Esc / backdrop click all silently did nothing). The view-toggle listener registration in 0.3.0 ran before the editor's listeners; if the toggle DOM elements were unavailable for any reason, an exception aborted the rest of setup. Listener registration is now null-safe via optional chaining, and `applyViewMode()` runs after all listeners are wired so it can never block setup.
+
+## [0.3.0] - 2026-04-25
+
+### Added
+- **Grid / List view toggle** (Google Keep-style) in the toolbar. Two icon buttons beside the search box switch between the masonry grid and a compact list. The choice is persisted per webview via `vscode.setState` so it survives panel close/reopen.
+- **List view** stacks cards as full-width rows: title (with body hidden) on the first row, tags on the second row, action buttons always visible on the right.
+
+## [0.2.3] - 2026-04-24
+
+### Fixed
+- **Every command failed with `command '…' not found` because `.vscodeignore` had `node_modules/**`, which stripped the runtime `gray-matter` dependency from the packaged VSIX.** `out/promptStore.js` then failed `require('gray-matter')` on load, preventing `activate()` from ever running. Removed the blanket `node_modules/**` ignore; `vsce` automatically excludes devDependencies based on `package.json`, so only the runtime dependency closure ships.
+
+## [0.2.2] - 2026-04-24
+
+### Fixed
+- Commands could fail to register (`command 'caspianPrompt.open' not found`) if the global storage directory couldn't be created during `activate()`. `activate` is now synchronous and registers commands immediately; directory creation is deferred to the first note write.
+
+## [0.2.1] - 2026-04-24
+
+### Changed
+- Activity-bar icon now uses `media/favicon.svg` (the user-supplied brand mark).
+
+## [0.2.0] - 2026-04-24
+
+### Added
+- **Activity-bar icon + sidebar tree view.** A new container in the activity bar hosts a tree view listing every note.
+- View-title buttons: **New** ($(add)), **Open full library** ($(preview)), **Refresh** ($(refresh)).
+- Right-click context menu on each tree item: **Copy**, **Insert at Cursor**, **Edit**, **Send to Chat**, **Delete**. Inline copy button on hover.
+- Tree items respect the configured default card action when clicked.
+- Welcome view shown when the library is empty, with quick links to create or open the full library.
+- `refresh` command.
+- `NotePanel.createOrShow` now accepts `{ editId }` so the **Edit** action on a tree item opens the full panel and immediately focuses the editor on that note.
+
+### Changed
+- `package.json` no longer declares explicit `activationEvents` — VS Code auto-generates them from command / view contributions in 1.74+.
+
+## [0.1.0] - 2026-04-24
+
+### Added
+- Initial release (under the prior name "Caspian Prompt"; renamed to "Caspian Notes" in 0.4.0).
+- Webview-based masonry grid (`open` command).
+- CRUD editor modal — title, comma-separated tags, body.
+- Markdown-with-frontmatter storage in `context.globalStorageUri`.
+- Tag chip row with AND-combined filtering and live counts.
+- Substring search across title, body, and tags.
+- Four card actions: copy to clipboard, insert at cursor, edit, send to chat.
+- Keyboard shortcuts inside the panel: `/` focus search, `Ctrl/Cmd+N` new, `Ctrl/Cmd+Enter` save, `Esc` close.
+
+### Security notes
+- Webview uses a strict CSP with per-load nonce; scripts are served only from the extension's `media/` folder via `localResourceRoots`.
+- Extension makes no network requests — notes never leave your machine unless you configure `chatCommand` to forward them to another extension.

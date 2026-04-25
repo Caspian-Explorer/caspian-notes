@@ -1,0 +1,277 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { NoteStore } from './noteStore';
+import { NotePanel } from './notePanel';
+import { NoteTreeItem, NoteTreeProvider } from './noteTreeProvider';
+import { ActionPresenter, performAction } from './noteActions';
+import { CardAction } from './types';
+
+export function activate(context: vscode.ExtensionContext): void {
+    const store = NoteStore.fromContext(context);
+    const tree = new NoteTreeProvider(store);
+    context.subscriptions.push(vscode.window.registerTreeDataProvider('caspianNotesList', tree));
+
+    // Refresh the tree when the grouping setting changes.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('caspianNotes.treeGrouping')) {
+                tree.refresh();
+            }
+        }),
+    );
+
+    // Surface parse errors once per file, with a "Reveal in Folder" action.
+    const warnedFiles = new Set<string>();
+    context.subscriptions.push(
+        store.onParseError(({ file, reason }) => {
+            if (warnedFiles.has(file)) {
+                return;
+            }
+            warnedFiles.add(file);
+            const name = path.basename(file);
+            vscode.window
+                .showWarningMessage(
+                    `Caspian Notes: couldn't parse "${name}" — ${reason}`,
+                    'Reveal in Folder',
+                )
+                .then((choice) => {
+                    if (choice === 'Reveal in Folder') {
+                        vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(file));
+                    }
+                });
+        }),
+    );
+
+    // Watch the storage dir so external edits (sync, manual edit, restore from backup)
+    // refresh the UI without requiring a reload.
+    const watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(store.dir), '*.md'),
+    );
+    const refresh = () => store.notifyExternalChange();
+    context.subscriptions.push(
+        watcher,
+        watcher.onDidCreate(refresh),
+        watcher.onDidChange(refresh),
+        watcher.onDidDelete(refresh),
+    );
+
+    // Status-bar / notification presenter for tree-command-driven actions.
+    const hostPresenter: ActionPresenter = {
+        notify(message, level) {
+            if (level === 'error') {
+                vscode.window.showWarningMessage(message);
+            } else {
+                vscode.window.setStatusBarMessage(message, 2000);
+            }
+        },
+        onEdit(noteId) {
+            NotePanel.createOrShow(context, store, { editId: noteId });
+        },
+    };
+    const dispatch = (action: CardAction, id: string | undefined) =>
+        performAction(store, action, id, hostPresenter);
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('caspianNotes.open', () => {
+            NotePanel.createOrShow(context, store);
+        }),
+        vscode.commands.registerCommand('caspianNotes.new', () => {
+            NotePanel.createOrShow(context, store, 'new');
+        }),
+        vscode.commands.registerCommand('caspianNotes.refresh', () => tree.refresh()),
+        vscode.commands.registerCommand('caspianNotes.toggleTreeGrouping', async () => {
+            const cfg = vscode.workspace.getConfiguration('caspianNotes');
+            const current = cfg.get<string>('treeGrouping', 'flat');
+            const next = current === 'byTag' ? 'flat' : 'byTag';
+            await cfg.update('treeGrouping', next, vscode.ConfigurationTarget.Global);
+        }),
+        vscode.commands.registerCommand('caspianNotes.insertFromPicker', () => insertFromPicker(store)),
+        vscode.commands.registerCommand('caspianNotes.item.defaultAction', (arg: unknown) =>
+            dispatch(defaultCardAction(), asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.copy', (arg: unknown) =>
+            dispatch('copy', asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.insert', (arg: unknown) =>
+            dispatch('insert', asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.edit', (arg: unknown) =>
+            dispatch('edit', asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.sendToChat', (arg: unknown) =>
+            dispatch('sendToChat', asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.delete', (arg: unknown) =>
+            deleteItem(store, asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.duplicate', (arg: unknown) =>
+            duplicateItem(store, asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.item.togglePin', (arg: unknown) =>
+            togglePin(store, asId(arg)),
+        ),
+        vscode.commands.registerCommand('caspianNotes.exportLibrary', () => exportLibrary(store)),
+        vscode.commands.registerCommand('caspianNotes.importLibrary', () => importLibrary(store)),
+    );
+}
+
+async function exportLibrary(store: NoteStore): Promise<void> {
+    const notes = await store.list();
+    if (notes.length === 0) {
+        vscode.window.showInformationMessage('Caspian Notes: nothing to export — your library is empty.');
+        return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(`caspian-notes-${today}.json`),
+        filters: { JSON: ['json'] },
+        title: 'Export Caspian Notes Library',
+    });
+    if (!uri) {
+        return;
+    }
+    const payload = {
+        format: 'caspian-notes/v1',
+        exportedAt: new Date().toISOString(),
+        notes,
+    };
+    await vscode.workspace.fs.writeFile(
+        uri,
+        Buffer.from(JSON.stringify(payload, null, 2), 'utf8'),
+    );
+    vscode.window.showInformationMessage(
+        `Exported ${notes.length} note${notes.length === 1 ? '' : 's'} to ${path.basename(uri.fsPath)}.`,
+    );
+}
+
+async function importLibrary(store: NoteStore): Promise<void> {
+    const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters: { JSON: ['json'] },
+        title: 'Import Caspian Notes Library',
+    });
+    if (!uris || uris.length === 0) {
+        return;
+    }
+    const fileUri = uris[0]!;
+    const data = await vscode.workspace.fs.readFile(fileUri);
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(Buffer.from(data).toString('utf8'));
+    } catch {
+        vscode.window.showErrorMessage('Caspian Notes: import failed — file is not valid JSON.');
+        return;
+    }
+    let notesArray: unknown[] | null = null;
+    if (parsed && typeof parsed === 'object') {
+        const maybe = (parsed as { notes?: unknown }).notes;
+        if (Array.isArray(maybe)) {
+            notesArray = maybe;
+        } else if (Array.isArray(parsed)) {
+            // Tolerate a bare-array form too.
+            notesArray = parsed;
+        }
+    } else if (Array.isArray(parsed)) {
+        notesArray = parsed;
+    }
+    if (!notesArray) {
+        vscode.window.showErrorMessage(
+            'Caspian Notes: import failed — expected a `notes` array or a top-level array of notes.',
+        );
+        return;
+    }
+    const count = await store.importNotes(notesArray);
+    vscode.window.showInformationMessage(
+        `Imported ${count} note${count === 1 ? '' : 's'}. Existing notes were not modified; imported entries got fresh IDs.`,
+    );
+}
+
+export function deactivate(): void {
+    // subscriptions are disposed via context.subscriptions
+}
+
+function defaultCardAction(): CardAction {
+    const raw = vscode.workspace.getConfiguration('caspianNotes').get<string>('defaultCardAction') ?? 'copy';
+    if (raw === 'insert' || raw === 'edit' || raw === 'copy') {
+        return raw;
+    }
+    return 'copy';
+}
+
+function asId(arg: unknown): string | undefined {
+    if (typeof arg === 'string') {
+        return arg;
+    }
+    if (arg instanceof NoteTreeItem) {
+        return arg.note.id;
+    }
+    return undefined;
+}
+
+async function togglePin(store: NoteStore, id: string | undefined): Promise<void> {
+    if (!id) {
+        return;
+    }
+    const note = await store.get(id);
+    if (!note) {
+        return;
+    }
+    await store.update(id, { pinned: !note.pinned });
+}
+
+async function duplicateItem(store: NoteStore, id: string | undefined): Promise<void> {
+    if (!id) {
+        return;
+    }
+    const source = await store.get(id);
+    if (!source) {
+        return;
+    }
+    const newTitle = source.title === 'Untitled' ? 'Untitled' : `${source.title} (copy)`;
+    await store.create({
+        title: newTitle,
+        tags: source.tags,
+        body: source.body,
+    });
+}
+
+async function deleteItem(store: NoteStore, id: string | undefined): Promise<void> {
+    if (!id) {
+        return;
+    }
+    const note = await store.get(id);
+    if (!note) {
+        return;
+    }
+    await store.delete(id);
+    const choice = await vscode.window.showInformationMessage(
+        `Deleted "${note.title}"`,
+        'Undo',
+    );
+    if (choice === 'Undo') {
+        await store.restore(note);
+    }
+}
+
+async function insertFromPicker(store: NoteStore): Promise<void> {
+    const notes = await store.list();
+    if (notes.length === 0) {
+        vscode.window.showInformationMessage('No notes yet. Open the Notes Library to add one.');
+        return;
+    }
+    const pick = await vscode.window.showQuickPick(
+        notes.map((n) => ({
+            label: n.title,
+            description: n.tags.join(', '),
+            detail: n.body.slice(0, 120).replace(/\s+/g, ' '),
+            id: n.id,
+        })),
+        { placeHolder: 'Pick a note to insert at the cursor' },
+    );
+    if (!pick) {
+        return;
+    }
+    // Reuse the action dispatch via the registered command — keeps the
+    // insert-with-no-active-editor fallback consistent.
+    await vscode.commands.executeCommand('caspianNotes.item.insert', pick.id);
+}
