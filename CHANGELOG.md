@@ -2,6 +2,11 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.5] - 2026-04-25
+
+### Added
+- **Hero screenshot in README.** Replaced the placeholder Screenshots section with `media/screenshots/main_screenshot.jpg` — a single composite shot of the activity-bar tree alongside the masonry grid with example prompt notes. Marketplace listings render the README from inside the VSIX, and the screenshot is bundled (no `.vscodeignore` exclusion of `media/`).
+
 ## [1.3.4] - 2026-04-25
 
 ### Security
@@ -31,9 +36,6 @@ The remaining 5 moderate `npm audit` findings (`@vscode/vsce` → `@azure/identi
 - **`npm run audit`** convenience script.
 - **README badges** for Marketplace version / installs / rating, license, and CI status.
 - **CLAUDE.md**: filled in the now-known caspian-notes repo GraphQL ID (`R_kgDOSLnYTw`); the Announcements category ID still requires Discussions to be enabled on the repo first.
-
-### Notes
-- README screenshots are stubbed — capture grid/sidebar/editor PNGs into `media/screenshots/` before the first marketplace listing for best conversion.
 
 ## [1.3.0] - 2026-04-25
 

@@ -88,13 +88,7 @@ You can manually copy the `notes/` folder between machines. VS Code **Settings S
 
 ## Screenshots
 
-Screenshots will appear here once captured (place 3 PNGs at `media/screenshots/{grid,sidebar,editor}.png` then reference them):
-
-```
-![Masonry grid](media/screenshots/grid.png)
-![Sidebar tree](media/screenshots/sidebar.png)
-![Editor with preview](media/screenshots/editor.png)
-```
+![Caspian Notes — sidebar tree and masonry grid with example prompt notes](media/screenshots/main_screenshot.jpg)
 
 ## License
 
