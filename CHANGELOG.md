@@ -2,6 +2,11 @@
 
 All notable changes to **Caspian Notes** will be documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.6] - 2026-05-07
+
+### Changed
+- **Maintenance release — no functional changes.** Repackaged the VSIX from a freshly installed dependency tree to refresh the published artifact. Source, configuration, and bundled assets are identical to 1.3.5.
+
 ## [1.3.5] - 2026-04-25
 
 ### Added
