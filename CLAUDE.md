@@ -96,17 +96,13 @@ After every commit, create a GitHub Discussion in the **Announcements** category
 
 **Create via GraphQL API:**
 
-> **Repository ID is filled.** The Announcements category ID still needs to be fetched once Discussions are enabled on the repo:
->
-> 1. On https://github.com/Caspian-Explorer/caspian-notes — Settings → General → Features → check **Discussions**.
-> 2. Create an "Announcements" category in the Discussions tab.
-> 3. Run the query below, copy the Announcements `id`, and paste into the mutation.
+> **Repository ID and Announcements category ID are filled in below.** Discussions are enabled on `CaspianTools/caspian-notes` and the Announcements category ID is `DIC_kwDOSLnYT84C7q_V`. The lookup query is preserved below for re-discovery if categories are ever rotated.
 
 ```bash
 # Fetch the Announcements category ID (run once after enabling Discussions):
 gh api graphql -f query='
   query {
-    repository(owner: "Caspian-Explorer", name: "caspian-notes") {
+    repository(owner: "CaspianTools", name: "caspian-notes") {
       id
       discussionCategories(first: 10) { nodes { id name } }
     }
@@ -117,7 +113,7 @@ gh api graphql -f query='
   mutation {
     createDiscussion(input: {
       repositoryId: "R_kgDOSLnYTw",
-      categoryId: "<ANNOUNCEMENTS_CATEGORY_ID_TODO>",
+      categoryId: "DIC_kwDOSLnYT84C7q_V",
       title: "<TITLE>",
       body: "<BODY>"
     }) {
